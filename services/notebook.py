@@ -108,11 +108,34 @@ class NotebookService:
                 return True
         return self._run_async(_delete())
     
-    def ask(self, notebook_id: str, question: str) -> str:
-        """Ask a question about the sources."""
+    def ask(
+        self,
+        notebook_id: str,
+        question: str,
+        conversation_id: str | None = None,
+    ) -> tuple[str, str | None, List[dict]]:
+        """Ask a question about the sources.
+
+        Pass conversation_id from a previous call to continue the same
+        conversation so NotebookLM has prior turns as context.
+
+        Returns:
+            Tuple of (answer, conversation_id, references). Each reference is
+            a dict with keys: citation_number, source_id, cited_text.
+        """
         async def _ask():
             from notebooklm import NotebookLMClient
             async with await NotebookLMClient.from_storage() as client:
-                result = await client.chat.ask(notebook_id, question)
-                return result.answer
+                result = await client.chat.ask(
+                    notebook_id, question, conversation_id=conversation_id
+                )
+                references = [
+                    {
+                        "citation_number": ref.citation_number,
+                        "source_id": ref.source_id,
+                        "cited_text": ref.cited_text,
+                    }
+                    for ref in result.references
+                ]
+                return result.answer, result.conversation_id, references
         return self._run_async(_ask())

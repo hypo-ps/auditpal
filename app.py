@@ -45,6 +45,7 @@ def init_session_state():
     defaults = {
         "messages": [],
         "current_notebook_id": None,
+        "current_conversation_id": None,
         "sources": [],
         "notebooks": [],
     }
@@ -113,6 +114,7 @@ def render_main_app(service: NotebookService, settings):
     def on_notebook_select(notebook_id):
         st.session_state["current_notebook_id"] = notebook_id
         st.session_state["messages"] = []
+        st.session_state["current_conversation_id"] = None
         st.session_state["sources"] = service.list_sources(notebook_id)
 
     def on_notebook_create(title):
@@ -169,10 +171,23 @@ def render_main_app(service: NotebookService, settings):
     with col2:
         # Chat callbacks
         def on_send(message):
-            return service.ask(st.session_state["current_notebook_id"], message)
+            answer, conv_id, refs = service.ask(
+                st.session_state["current_notebook_id"],
+                message,
+                conversation_id=st.session_state.get("current_conversation_id"),
+            )
+            st.session_state["current_conversation_id"] = conv_id
+
+            sources_by_id = {s.id: s.title for s in st.session_state["sources"]}
+            for ref in refs:
+                ref["source_title"] = sources_by_id.get(
+                    ref["source_id"], "Unknown source"
+                )
+            return {"answer": answer, "references": refs}
 
         def on_clear():
             st.session_state["messages"] = []
+            st.session_state["current_conversation_id"] = None
 
         def on_export(format):
             notebook_title = "AuditPal Chat"
